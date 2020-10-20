@@ -1,5 +1,5 @@
 /*
-lepton n. �����ӣ�ϣ���Ļ��ҵ�λ����ϣ������СӲ�ң�
+lepton n. 轻粒子（希腊的货币单位，古希腊的最小硬币）
 
 
 
@@ -10,24 +10,26 @@ lepton n. �����ӣ�ϣ���Ļ��ҵ�λ����ϣ������СӲ�ң�
 #include<assert.h>
 #include<stdlib.h>
 
-//json ��������
+//json 所有类型
 typedef enum {LEPT_NULL,LEPT_FALSE,LEPT_TRUE,LEPT_NUMBER,LEPT_STRING,LEPT_ARRAY,LEPT_OBJECT} lept_type;
 
-//�����ķ���ֵ,OK����LEPT_PARSE_OK
+//解析的返回值,OK返回LEPT_PARSE_OK
 enum {
 	LEPT_PARSE_OK = 0,
-	LEPT_PARSE_EXPECT_VALUE,       //һ��JSONֻ���пհ�
-	LEPT_PARSE_INVALID_VALUE,      //
-	LEPT_PARSE_ROOT_NOT_SINGULAR   //��һ��ֵ֮���ڿհ�֮���������ַ�
+	LEPT_PARSE_EXPECT_VALUE,       //一个JSON只含有空白  ""  "  "
+	LEPT_PARSE_INVALID_VALUE,      //无效值 非"null" "false" "true"
+	LEPT_PARSE_ROOT_NOT_SINGULAR   //若一个值之后，在空白之后还有其他字符"false x"  "null q"
 };
 
-//�����������ÿһ���ڵ�,��������ýڵ������
+//解析成树后的每一个节点,里面包含该节点的类型
 typedef struct {
+	double n;//用于解析number 只有当type为LEPT_NUMBER时才有意义
 	lept_type type;
 }lept_value;
 
-int lept_parse(lept_value * v,const char * json); //�ǽ���JSON
+int lept_parse(lept_value * v,const char * json); //是解析JSON
 
-lept_type lept_get_type(const lept_value* v);//���ʽ��
+lept_type lept_get_type(const lept_value* v);//访问结果
+double lept_get_number(const lept_value* v);
 
 #endif
