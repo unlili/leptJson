@@ -1,5 +1,7 @@
 
 
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -71,8 +73,81 @@ static int test_pass = 0;
 		lept_free(&v);\
 	}while(0)
 
+#define TEST_ROUNDTRIP(json)\
+	do {\
+		lept_value v;\
+		char * json2;\
+		size_t length;\
+		lept_init(&v);\
+		EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, json));\
+		EXPECT_EQ_INT(LEPT_STRINGIFY_OK, lept_stringify(&v, &json2, &length));\
+		EXPECT_EQ_STRING(json, json2, length);\
+		lept_free(&v);\
+        free(json2);\
+	}while(0)
 
 //-------------------------每一种测试函数-------------------------
+
+
+static void test_parse_object() {
+	lept_value v;
+	size_t i;
+
+	lept_init(&v);
+	EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, " { } "));
+	EXPECT_EQ_INT(LEPT_OBJECT, lept_get_type(&v));
+
+	EXPECT_EQ_SIZE_T(0, lept_get_object_size(&v));
+	lept_free(&v);
+
+	lept_init(&v);
+	EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v,
+		" { "
+		"\"n\" : null , "
+		"\"f\" : false , "
+		"\"t\" : true , "
+		"\"i\" : 123 , "
+		"\"s\" : \"abc\", "
+		"\"a\" : [ 1, 2, 3 ],"
+		"\"o\" : { \"1\" : 1, \"2\" : 2, \"3\" : 3 }"
+		" } "
+		));
+	EXPECT_EQ_INT(LEPT_OBJECT, lept_get_type(&v));
+	EXPECT_EQ_SIZE_T(7, lept_get_object_size(&v));
+	EXPECT_EQ_STRING("n", lept_get_object_key(&v, 0), lept_get_object_key_length(&v, 0));
+	EXPECT_EQ_INT(LEPT_NULL, lept_get_type(lept_get_object_value(&v, 0)));
+	EXPECT_EQ_STRING("f", lept_get_object_key(&v, 1), lept_get_object_key_length(&v, 1));
+	EXPECT_EQ_INT(LEPT_FALSE, lept_get_type(lept_get_object_value(&v, 1)));
+	EXPECT_EQ_STRING("t", lept_get_object_key(&v, 2), lept_get_object_key_length(&v, 2));
+	EXPECT_EQ_INT(LEPT_TRUE, lept_get_type(lept_get_object_value(&v, 2)));
+	EXPECT_EQ_STRING("i", lept_get_object_key(&v, 3), lept_get_object_key_length(&v, 3));
+	EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(lept_get_object_value(&v, 3)));
+	EXPECT_EQ_DOUBLE(123.0, lept_get_number(lept_get_object_value(&v, 3)));
+	EXPECT_EQ_STRING("s", lept_get_object_key(&v, 4), lept_get_object_key_length(&v, 4));
+	EXPECT_EQ_INT(LEPT_STRING, lept_get_type(lept_get_object_value(&v, 4)));
+	EXPECT_EQ_STRING("abc", lept_get_string(lept_get_object_value(&v, 4)), lept_get_string_length(lept_get_object_value(&v, 4)));
+	EXPECT_EQ_STRING("a", lept_get_object_key(&v, 5), lept_get_object_key_length(&v, 5));
+	EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(lept_get_object_value(&v, 5)));
+	EXPECT_EQ_SIZE_T(3, lept_get_array_size(lept_get_object_value(&v, 5)));
+	for (i = 0; i < 3; i++) {
+		lept_value* e = lept_get_array_element(lept_get_object_value(&v, 5), i);
+		EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(e));
+		EXPECT_EQ_DOUBLE(i + 1.0, lept_get_number(e));
+	}
+	EXPECT_EQ_STRING("o", lept_get_object_key(&v, 6), lept_get_object_key_length(&v, 6));
+	{
+		lept_value* o = lept_get_object_value(&v, 6);
+		EXPECT_EQ_INT(LEPT_OBJECT, lept_get_type(o));
+		for (i = 0; i < 3; i++) {
+			lept_value* ov = lept_get_object_value(o, i);
+			EXPECT_TRUE('1' + i == lept_get_object_key(o, i)[0]);
+			EXPECT_EQ_SIZE_T(1, lept_get_object_key_length(o, i));
+			EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(ov));
+			EXPECT_EQ_DOUBLE(i + 1.0, lept_get_number(ov));
+		}
+	}
+	lept_free(&v);
+}
 
 static void test_parse_array() {
 	size_t i, j;
@@ -97,8 +172,8 @@ static void test_parse_array() {
 	lept_value * ele4 = lept_get_array_element(&v, 4);
 	EXPECT_EQ_STRING("abc", lept_get_string(ele4), lept_get_string_length(ele4));
 	EXPECT_EQ_INT(LEPT_STRING, ele4->type);
-	lept_set_string(ele4, "Go ahead", sizeof("Go ahead")-1);
-	EXPECT_EQ_STRING("Go ahead", lept_get_string(ele4), lept_get_string_length(ele4));
+	lept_set_string(ele4, "Go?ahead", sizeof("Go?ahead")-1);
+	EXPECT_EQ_STRING("Go?ahead", lept_get_string(ele4), lept_get_string_length(ele4));
 	lept_free(&v);
 
 	lept_parse(&v, "[ [ ] , [ 0 ] , [ 0 , 1 ] , [ 0 , 1 , 2 ] ]");
@@ -348,8 +423,8 @@ static void test_parse_invalid_unicode_surrogate() {
 	TEST_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE, "\"\\uD800\\uE000\"");
 }
 
-
-static void test_parse_miss_comma_or_square_bracket() {
+static void test_parse_miss_comma_or_square_bracket() 
+{
 
 	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1");
 	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[1}");
@@ -357,6 +432,163 @@ static void test_parse_miss_comma_or_square_bracket() {
 	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_SQUARE_BRACKET, "[[]");
 
 }
+
+static void test_parse_miss_key() 
+{
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{1:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{true:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{false:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{null:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{[]:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{{}:1,");
+	TEST_ERROR(LEPT_PARSE_MISS_KEY, "{\"a\":1,");
+}
+
+static void test_parse_miss_colon() 
+{
+	TEST_ERROR(LEPT_PARSE_MISS_COLON, "{\"a\"}");
+	TEST_ERROR(LEPT_PARSE_MISS_COLON, "{\"a\",\"b\"}");
+}
+
+static void test_parse_miss_comma_or_curly_bracket() 
+{
+	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":1");
+	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":1]");
+	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":1 \"b\"");
+	TEST_ERROR(LEPT_PARSE_MISS_COMMA_OR_CURLY_BRACKET, "{\"a\":{}");
+}
+
+static void test_stringify_number() {
+	TEST_ROUNDTRIP("0");
+	TEST_ROUNDTRIP("-0");
+	TEST_ROUNDTRIP("1");
+	TEST_ROUNDTRIP("-1");
+	TEST_ROUNDTRIP("1.5");
+	TEST_ROUNDTRIP("-1.5");
+	TEST_ROUNDTRIP("3.25");
+	TEST_ROUNDTRIP("1e+20");
+	TEST_ROUNDTRIP("1.234e+20");
+	TEST_ROUNDTRIP("1.234e-20");
+
+	TEST_ROUNDTRIP("1.0000000000000002"); /* the smallest number > 1 */
+	TEST_ROUNDTRIP("4.9406564584124654e-324"); /* minimum denormal */
+	TEST_ROUNDTRIP("-4.9406564584124654e-324");
+	TEST_ROUNDTRIP("2.2250738585072009e-308");  /* Max subnormal double */
+	TEST_ROUNDTRIP("-2.2250738585072009e-308");
+	TEST_ROUNDTRIP("2.2250738585072014e-308");  /* Min normal positive double */
+	TEST_ROUNDTRIP("-2.2250738585072014e-308");
+	TEST_ROUNDTRIP("1.7976931348623157e+308");  /* Max double */
+	TEST_ROUNDTRIP("-1.7976931348623157e+308");
+}
+
+static void test_stringify_string() {
+	TEST_ROUNDTRIP("\"\"");
+	TEST_ROUNDTRIP("\"Hello\"");
+	TEST_ROUNDTRIP("\"Hello\\nWorld\"");
+	TEST_ROUNDTRIP("\"\\\" \\\\ / \\b \\f \\n \\r \\t\"");
+	TEST_ROUNDTRIP("\"Hello\\u0000World\"");
+}
+
+static void test_stringify_array() {
+	TEST_ROUNDTRIP("[]");
+	TEST_ROUNDTRIP("[null,false,true,123,\"abc\",[1,2,3]]");
+}
+
+static void test_stringify_object() {
+	TEST_ROUNDTRIP("{}");
+	TEST_ROUNDTRIP("{\"n\":null,\"f\":false,\"t\":true,\"i\":123,\"s\":\"abc\",\"a\":[1,2,3],\"o\":{\"1\":1,\"2\":2,\"3\":3}}");
+}
+
+
+static void test_stringify() {
+	TEST_ROUNDTRIP("null");
+	TEST_ROUNDTRIP("false");
+	TEST_ROUNDTRIP("true");
+	/* 往返（roundtrip）测试 */
+	test_stringify_number();
+	test_stringify_string();
+	test_stringify_array();
+	test_stringify_object();
+}
+
+static void test_find()
+{
+	lept_value o,*v;
+	size_t index;
+	lept_init(&o);
+	lept_parse(&o, "{\"name\":\"Milo\", \"gender\":\"M\"}");
+	index = lept_find_object_index(&o, "name", 4);
+
+
+	cout << index << endl;
+
+	if (index != LEPT_KEY_NOT_EXIST) {
+		lept_value* v = lept_get_object_value(&o, index);
+		printf("%s\n", lept_get_string(v));
+	}
+
+	if ((v = lept_find_object_value(&o, "name", 4)) != NULL)
+		printf("%s\n", lept_get_string(v));
+
+	lept_free(&o);
+
+	lept_value a, b;
+	lept_parse(&a, "{\"name\":\"Miloaa\", \"gender\":\"M\"}");
+	lept_parse(&b, "{\"name\":\"Milo\", \"gender\":\"M\"}");
+	if (lept_is_equal(&a, &b))
+		cout << "相等" << endl;
+	else
+		cout << "不相等" << endl;
+
+	lept_parse(&a, "{\"name\":\"Milo\", \"gender\":\"M\"}");
+	lept_parse(&b, "{\"name\":\"Milo\", \"gender\":\"M\"}");
+	if (lept_is_equal(&a, &b))
+		cout << "相等" << endl;
+	else
+		cout << "不相等" << endl;
+
+	lept_parse(&a, "{ \"nae\":\"Milo\" }");
+	lept_parse(&b, "{ \"name\":\"Milo\" }");
+	if (lept_is_equal(&a, &b))
+		cout << "相等" << endl;
+	else
+		cout << "不相等" << endl;
+}
+
+static void test_set_object()
+{
+	const char* json = "{\"a\":[1,2],\"b\":3}";//创建一个json
+	char *out;       
+	lept_value v;
+	lept_init(&v);
+	lept_parse(&v, json);//解析json到v
+
+	lept_copy(
+		lept_find_object_value(&v, "b", 1),
+		lept_find_object_value(&v, "a", 1));
+
+	printf("%s\n", out = lept_stringify(&v, NULL)); /* {"a":[1,2],"b":[1,2]} */
+
+	free(out);
+
+	lept_parse(&v, json);
+	lept_move(
+		lept_find_object_value(&v, "b", 1),
+		lept_find_object_value(&v, "a", 1));
+	printf("%s\n", out = lept_stringify(&v, NULL)); /* {"a":null,"b":[1,2]} */
+	free(out);
+
+	lept_parse(&v, json);
+	lept_swap(
+		lept_find_object_value(&v, "b", 1),
+		lept_find_object_value(&v, "a", 1));
+	printf("%s\n", out = lept_stringify(&v, NULL)); /* {"a":3,"b":[1,2]} */
+	free(out);
+
+	lept_free(&v);
+}
+
 /* ... */
 static void test_parse() {
 
@@ -366,6 +598,7 @@ static void test_parse() {
 	test_parse_number();
 	test_parse_string();
 	test_parse_array();
+	test_parse_object();
 
 	test_parse_expect_value();
 	test_parse_invalid_value();
@@ -380,7 +613,12 @@ static void test_parse() {
 	test_parse_invalid_unicode_surrogate();	
 
 	test_parse_miss_comma_or_square_bracket();
+
+	//test_parse_miss_key();
+	//test_parse_miss_colon();
+	//test_parse_miss_comma_or_curly_bracket();
 }
+
 
 static void test_access()
 {
@@ -390,35 +628,29 @@ static void test_access()
 	test_access_string();
 }
 
-///*解析p内的4位十六进数字，存储为码点u  把p内的十六进制变成二进制就行,*/
-//static const char * lept_parse_hex4(const char* p, unsigned * u)
-//{
-//	char ch;  //ABCD11
-//	int tempV,ff=0;
-//	for (size_t i = 0; i < 4; ++i)
-//	{
-//		ch = *p++;
-//		if(IS_LETTER(ch)) tempV = ch - (isupper(ch) ? 55 : 87);
-//		else if (IS_DIGIT(ch)) tempV = ch - '0';
-//		else return NULL;
-//		cout << "tempv = " << tempV << endl;
-//		ff += (int)(tempV * pow(16,3-i));
-//	}
-//	*u = ff;
-//	return p;
-//}
 
 int main() {
 
 #ifdef _WINDOWS
+	_CrtDumpMemoryLeaks();
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
-	test_parse();
-	test_access();
-	printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
+	//test_parse();
+	//test_stringify();
+	//test_access();
+	//printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
+
+	test_find();
 
 	//test_parse_array();
 	//printf("%d/%d (%3.2f%%) passed\n", test_pass, test_count, test_pass * 100.0 / test_count);
+
+	//static const char hex_digits[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+
+	//char a = '1';
+	//cout << (int)(unsigned char)(a) << endl;
+	//cout << (a >> 4) << endl;
+	//cout << hex_digits[a >> 4] << endl;
 
 	system("pause");
 	return main_ret;
